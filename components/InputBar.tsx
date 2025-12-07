@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Settings, Clock, ChevronRight, Loader2, HardDrive } from 'lucide-react';
 
@@ -60,7 +61,7 @@ const InputBar: React.FC<InputBarProps> = ({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={statusMessage || "Ask Local AI..."}
+            placeholder={statusMessage || "Type a command..."}
             className="flex-1 bg-transparent border-none text-white placeholder-gray-500 focus:ring-0 focus:outline-none px-3 text-sm font-light h-10"
             disabled={isProcessing}
           />
@@ -69,7 +70,7 @@ const InputBar: React.FC<InputBarProps> = ({
             <div className="flex items-center space-x-1.5 px-2 py-1 bg-[#2A2A2A] rounded border border-white/5 opacity-80 hover:opacity-100 transition-opacity cursor-pointer">
                 <HardDrive size={10} className="text-green-400"/>
                 <span className="text-[10px] text-gray-300 font-medium">
-                    Llama 3
+                    Auto
                 </span>
             </div>
 

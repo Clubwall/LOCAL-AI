@@ -48,3 +48,24 @@ export interface SettingsTab {
   label: string;
   icon: React.ReactNode;
 }
+
+export type InstallStatus = 'available' | 'installing' | 'installed';
+export type DownloadStatus = 'available' | 'downloading' | 'downloaded';
+
+export interface ToolItem {
+  id: string;
+  name: string;
+  desc: string;
+  status: InstallStatus;
+  license: string;
+  progress?: number; // 0-100
+}
+
+export interface OfflineModelItem {
+  id: string;
+  name: string;
+  desc: string;
+  size: string;
+  status: DownloadStatus;
+  progress?: number; // 0-100
+}

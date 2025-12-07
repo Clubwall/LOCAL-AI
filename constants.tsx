@@ -1,4 +1,5 @@
-import { FileType, FileSystemItem, CommandCategory } from './types';
+
+import { FileType, FileSystemItem, CommandCategory, ToolItem, OfflineModelItem } from './types';
 import { Settings, Zap, Brain, PenTool, Info } from 'lucide-react';
 import React from 'react';
 
@@ -88,21 +89,59 @@ export const CATEGORY_LABELS: Record<CommandCategory, string> = {
   [CommandCategory.UNKNOWN]: 'Run unknown scripts',
 };
 
-export const EXTRA_TOOLS = [
-    { name: 'FFmpeg', desc: 'Video and audio processing tools', status: 'installed', license: 'LGPL v2.1+' },
-    { name: 'Ghostscript', desc: 'PDF rendering and conversion', status: 'installed', license: 'AGPL Licence v3' },
-    { name: 'ImageMagick', desc: 'Image processing tools', status: 'available', license: 'Apache Licence v2' },
-    { name: 'QPDF', desc: 'PDF splitting, merging, and encryption', status: 'available', license: 'Apache License v2' },
-    { name: 'Pandoc', desc: 'Versatile converter for markdown, LaTeX, HTML', status: 'available', license: 'GPL Licence v2' },
-    { name: 'Poppler', desc: 'Extract text, images, and info from PDFs', status: 'available', license: 'GPL License v2' },
-    { name: 'Gifsicle', desc: 'Create, edit, and optimize GIFs', status: 'available', license: 'GPL' },
+export const INITIAL_EXTRA_TOOLS: ToolItem[] = [
+    { id: 'ffmpeg', name: 'FFmpeg', desc: 'Video and audio processing tools', status: 'available', license: 'LGPL v2.1+' },
+    { id: 'ghostscript', name: 'Ghostscript', desc: 'PDF rendering and conversion', status: 'available', license: 'AGPL Licence v3' },
+    { id: 'imagemagick', name: 'ImageMagick', desc: 'Image processing tools', status: 'available', license: 'Apache Licence v2' },
+    { id: 'qpdf', name: 'QPDF', desc: 'PDF splitting, merging, and encryption', status: 'available', license: 'Apache License v2' },
+    { id: 'pandoc', name: 'Pandoc', desc: 'Versatile converter for markdown, LaTeX, HTML', status: 'available', license: 'GPL Licence v2' },
+    { id: 'poppler', name: 'Poppler', desc: 'Extract text, images, and info from PDFs', status: 'available', license: 'GPL License v2' },
+    { id: 'gifsicle', name: 'Gifsicle', desc: 'Create, edit, and optimize GIFs', status: 'available', license: 'GPL' },
 ];
 
-export const AI_MODELS = [
-    { id: 'gpt-5-mini', name: 'GPT-5 mini', desc: 'Can be very slow, but gives good results, from OpenAI.', type: 'online' },
-    { id: 'gpt-5-nano', name: 'GPT-5 nano', desc: 'Super fast, good for summarisation but not ideal for general usage.', type: 'online' },
-    { id: 'gpt-4.1-mini', name: 'GPT-4.1 mini', desc: 'Perfect for general usage: Fast, yet great accuracy, from OpenAI.', type: 'online', default: true },
-    { id: 'gpt-4.1-nano', name: 'GPT-4.1 nano', desc: 'Super fast, good for summarisation but not ideal for general usage.', type: 'online' },
-    { id: 'llama-3', name: 'Llama 3 (8B)', desc: 'Local • Offline • Requires 8GB RAM', type: 'local', installed: true },
-    { id: 'mistral-7b', name: 'Mistral (7B)', desc: 'Local • Offline • Fast', type: 'local', installed: false },
+export const ONLINE_AI_PROVIDERS = [
+  { 
+    id: 'openai', 
+    name: 'OpenAI', 
+    models: [
+      { id: 'gpt-4o', name: 'GPT-4o', desc: 'Flagship high-intelligence' },
+      { id: 'gpt-4o-mini', name: 'GPT-4o mini', desc: 'Fast, affordable' }
+    ]
+  },
+  { 
+    id: 'google', 
+    name: 'Google Gemini', 
+    models: [
+      { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', desc: 'Mid-size multimodal' },
+      { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', desc: 'Fast and efficient' }
+    ]
+  },
+  { 
+    id: 'anthropic', 
+    name: 'Anthropic', 
+    models: [
+      { id: 'claude-3-5-sonnet', name: 'Claude 3.5 Sonnet', desc: 'High intelligence & speed' },
+      { id: 'claude-3-haiku', name: 'Claude 3 Haiku', desc: 'Fastest Claude model' }
+    ]
+  },
+  { 
+    id: 'groq', 
+    name: 'Groq Cloud', 
+    models: [
+      { id: 'llama-3.1-70b', name: 'Llama 3.1 70B', desc: 'Cloud hosted open model' },
+      { id: 'mixtral-8x7b', name: 'Mixtral 8x7B', desc: 'High speed MoE' }
+    ]
+  }
+];
+
+export const INITIAL_OFFLINE_AI_MODELS: OfflineModelItem[] = [
+  { id: 'llama3.2', name: 'Llama 3.2', desc: 'Meta • 3B params', size: '2.4 GB', status: 'available' },
+  { id: 'llama3.1', name: 'Llama 3.1', desc: 'Meta • 8B params', size: '4.7 GB', status: 'available' },
+  { id: 'gemma2', name: 'Gemma 2', desc: 'Google • 9B params', size: '5.1 GB', status: 'available' },
+  { id: 'mistral', name: 'Mistral', desc: 'Mistral AI • 7B', size: '4.1 GB', status: 'available' },
+  { id: 'phi3', name: 'Phi-3', desc: 'Microsoft • 3.8B', size: '2.3 GB', status: 'available' },
+  { id: 'qwen2.5', name: 'Qwen 2.5', desc: 'Alibaba • 7B', size: '4.2 GB', status: 'available' },
+  { id: 'codellama', name: 'Code Llama', desc: 'Meta • Code specialized', size: '3.8 GB', status: 'available' },
+  { id: 'neural-chat', name: 'Neural Chat', desc: 'Intel • 7B', size: '4.1 GB', status: 'available' },
+  { id: 'vicuna', name: 'Vicuna', desc: 'LMSYS • 7B', size: '4.0 GB', status: 'available' },
 ];

@@ -1,13 +1,19 @@
+
 import React, { useState } from 'react';
-import { X, Info, Check, Download, Trash2, Cloud, HardDrive, Key } from 'lucide-react';
-import { SETTINGS_TABS, CATEGORY_LABELS, EXTRA_TOOLS, AI_MODELS } from '../constants';
-import { AutoRunSettings, CommandCategory } from '../types';
+import { X, Info, Check, Download, Trash2, Cloud, HardDrive, Key, ExternalLink, Globe, Server, Loader2 } from 'lucide-react';
+import { SETTINGS_TABS, CATEGORY_LABELS, ONLINE_AI_PROVIDERS } from '../constants';
+import { AutoRunSettings, CommandCategory, ToolItem, OfflineModelItem } from '../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   settings: AutoRunSettings;
   onSettingsChange: (newSettings: AutoRunSettings) => void;
+  tools: ToolItem[];
+  onInstallTool: (id: string) => void;
+  onUninstallTool: (id: string) => void;
+  offlineModels: OfflineModelItem[];
+  onDownloadModel: (id: string) => void;
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -15,9 +21,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   settings,
   onSettingsChange,
+  tools,
+  onInstallTool,
+  onUninstallTool,
+  offlineModels,
+  onDownloadModel
 }) => {
   const [activeTab, setActiveTab] = useState('autorun');
-  const [apiKey, setApiKey] = useState('');
+  // Mock state for API keys
+  const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
 
   if (!isOpen) return null;
 
@@ -28,9 +40,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     });
   };
 
+  const handleApiKeyChange = (providerId: string, value: string) => {
+    setApiKeys(prev => ({ ...prev, [providerId]: value }));
+  };
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm font-sans">
-      <div className="w-[680px] h-[520px] bg-[#2A2A2A] rounded-xl shadow-2xl border border-white/10 flex flex-col overflow-hidden text-[#ececec]">
+      <div className="w-[800px] h-[600px] bg-[#2A2A2A] rounded-xl shadow-2xl border border-white/10 flex flex-col overflow-hidden text-[#ececec]">
         
         {/* Header/Title Bar */}
         <div className="h-10 bg-[#383838] flex items-center justify-center relative border-b border-black/20 shrink-0">
@@ -52,33 +68,33 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex flex-col items-center justify-center px-4 py-1.5 rounded-md transition-colors ${
+                className={`flex flex-col items-center justify-center px-6 py-2 rounded-md transition-colors ${
                   isActive ? 'bg-[#4A4A4A] text-white' : 'text-gray-400 hover:text-gray-200'
                 }`}
               >
                 <div className={`${isActive ? 'text-[#FF9F0A]' : 'text-gray-400'}`}>
                   {tab.icon}
                 </div>
-                <span className="text-[11px] mt-1">{tab.label}</span>
+                <span className="text-[11px] mt-1 font-medium">{tab.label}</span>
               </button>
             );
           })}
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto bg-[#2A2A2A] p-6">
+        <div className="flex-1 overflow-hidden bg-[#2A2A2A] relative">
           
           {/* AUTO RUN TAB */}
           {activeTab === 'autorun' && (
-            <div className="space-y-6">
-              <div className="text-center">
-                <h3 className="text-base font-semibold text-white">Substage can run commands with or without confirmation</h3>
+            <div className="p-8 h-full overflow-y-auto">
+              <div className="text-center mb-8">
+                <h3 className="text-lg font-semibold text-white">Substage can run commands with or without confirmation</h3>
                 <p className="text-sm text-gray-400 mt-1">What kinds of commands should run <span className="text-white font-medium">without asking?</span></p>
               </div>
 
-              <div className="grid grid-cols-2 gap-x-12 gap-y-3 px-8">
+              <div className="grid grid-cols-2 gap-x-16 gap-y-4 px-12">
                 {/* Column 1 */}
-                <div className="space-y-3">
+                <div className="space-y-4">
                     <label className="flex items-center space-x-3 cursor-pointer group">
                         <input 
                             type="checkbox" 
@@ -121,15 +137,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* Column 2 */}
-                <div className="space-y-3">
-                   <label className="flex items-center space-x-3 cursor-pointer group">
+                <div className="space-y-4">
+                   <label className="flex items-center space-x-3 cursor-pointer group opacity-60">
                         <input 
                             type="checkbox" 
                             checked={true} 
                             readOnly
                             className="form-checkbox h-4 w-4 text-[#FF9F0A] rounded border-gray-600 bg-[#3A3A3A] focus:ring-0 focus:ring-offset-0"
                         />
-                        <span className="text-sm text-gray-200 group-hover:text-white">Have minor side effects</span>
+                        <span className="text-sm text-gray-200">Have minor side effects</span>
                     </label>
 
                     <label className="flex items-center space-x-3 cursor-pointer group">
@@ -148,110 +164,188 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* AI MODELS TAB */}
           {activeTab === 'models' && (
-             <div className="h-full flex flex-col">
-                 <div className="mb-6">
-                    <h3 className="text-base font-semibold text-white mb-2">Choose which models appear in the model selector:</h3>
+             <div className="absolute inset-0 flex flex-col">
+                <div className="flex-1 flex overflow-hidden">
                     
-                    <div className="flex space-x-4">
-                        <div className="flex-1">
-                             <h4 className="text-sm font-semibold text-gray-300 mb-3 border-b border-white/10 pb-1">Online Models (API)</h4>
-                             <div className="space-y-3">
-                                {AI_MODELS.filter(m => m.type === 'online').map(model => (
-                                    <label key={model.id} className="flex items-start space-x-3 p-2 rounded hover:bg-white/5 cursor-pointer">
-                                        <input type="checkbox" defaultChecked={model.default} className="mt-1 bg-[#3A3A3A] border-gray-600 rounded text-[#FF9F0A] focus:ring-0"/>
-                                        <div>
-                                            <div className="text-sm font-medium text-white">{model.name}</div>
-                                            <div className="text-xs text-gray-400 leading-tight">{model.desc}</div>
-                                        </div>
-                                    </label>
-                                ))}
+                    {/* LEFT COLUMN: ONLINE */}
+                    <div className="w-1/2 flex flex-col border-r border-white/10 bg-[#252525]">
+                         <div className="p-4 border-b border-white/10 bg-[#2A2A2A]">
+                             <div className="flex items-center space-x-2 text-[#FF9F0A] mb-1">
+                                 <Globe size={18} />
+                                 <h4 className="font-semibold text-sm">Online Models</h4>
                              </div>
-                             
-                             <div className="mt-4 p-3 bg-[#1A1A1A] rounded border border-white/5">
-                                 <div className="flex items-center space-x-2 text-xs text-gray-400 mb-2">
-                                    <Key size={12}/>
-                                    <span>OpenAI / Provider API Key</span>
-                                 </div>
-                                 <input 
-                                    type="password" 
-                                    value={apiKey}
-                                    onChange={(e) => setApiKey(e.target.value)}
-                                    placeholder="sk-..."
-                                    className="w-full bg-[#2A2A2A] border border-white/10 rounded px-2 py-1 text-xs text-white focus:border-[#FF9F0A] focus:outline-none"
-                                 />
-                             </div>
-                        </div>
-
-                        <div className="w-[1px] bg-white/10"></div>
-
-                        <div className="flex-1">
-                             <h4 className="text-sm font-semibold text-gray-300 mb-3 border-b border-white/10 pb-1">Local Models (Offline)</h4>
-                             <div className="space-y-3">
-                                {AI_MODELS.filter(m => m.type === 'local').map(model => (
-                                    <div key={model.id} className={`flex items-start justify-between p-2 rounded border ${model.installed ? 'bg-[#333] border-[#FF9F0A]/30' : 'bg-transparent border-white/5 opacity-70'}`}>
-                                        <div className="flex items-start space-x-3">
-                                            <input type="checkbox" defaultChecked={model.installed} disabled={!model.installed} className="mt-1 bg-[#3A3A3A] border-gray-600 rounded text-[#FF9F0A] focus:ring-0"/>
-                                            <div>
-                                                <div className="text-sm font-medium text-white">{model.name}</div>
-                                                <div className="text-xs text-gray-400 leading-tight">{model.desc}</div>
-                                            </div>
+                             <p className="text-xs text-gray-400">Connect to powerful cloud APIs.</p>
+                         </div>
+                         
+                         <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                            {ONLINE_AI_PROVIDERS.map((provider) => (
+                                <div key={provider.id} className="bg-[#2A2A2A] rounded-lg border border-white/5 p-4 shadow-sm">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h5 className="font-medium text-sm text-gray-200">{provider.name}</h5>
+                                    </div>
+                                    
+                                    <div className="mb-3">
+                                        <div className="flex items-center space-x-2 bg-[#1A1A1A] rounded px-2 py-1.5 border border-white/10 focus-within:border-[#FF9F0A]/50 transition-colors">
+                                            <Key size={12} className="text-gray-500 shrink-0"/>
+                                            <input 
+                                                type="password"
+                                                placeholder={`Enter ${provider.name} API Key`}
+                                                value={apiKeys[provider.id] || ''}
+                                                onChange={(e) => handleApiKeyChange(provider.id, e.target.value)}
+                                                className="bg-transparent border-none text-xs text-white placeholder-gray-600 focus:ring-0 w-full p-0"
+                                            />
                                         </div>
                                     </div>
-                                ))}
-                             </div>
-                             <div className="mt-4 text-center">
-                                 <button className="text-xs text-[#FF9F0A] hover:underline flex items-center justify-center w-full space-x-1">
-                                    <Download size={12}/>
-                                    <span>Download more models</span>
-                                 </button>
-                             </div>
-                        </div>
+
+                                    <div className="space-y-2 pl-1">
+                                        {provider.models.map(model => (
+                                            <label key={model.id} className="flex items-start space-x-2 cursor-pointer group">
+                                                <input type="checkbox" className="mt-0.5 bg-[#3A3A3A] border-gray-600 rounded text-[#FF9F0A] focus:ring-0 w-3.5 h-3.5"/>
+                                                <div>
+                                                    <div className="text-xs font-medium text-gray-300 group-hover:text-white">{model.name}</div>
+                                                    <div className="text-[10px] text-gray-500">{model.desc}</div>
+                                                </div>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                         </div>
                     </div>
+
+                    {/* RIGHT COLUMN: OFFLINE */}
+                    <div className="w-1/2 flex flex-col bg-[#222]">
+                        <div className="p-4 border-b border-white/10 bg-[#2A2A2A]">
+                             <div className="flex items-center justify-between">
+                                 <div className="flex items-center space-x-2 text-[#28C840]">
+                                     <Server size={18} />
+                                     <h4 className="font-semibold text-sm">Local Models</h4>
+                                 </div>
+                             </div>
+                             <p className="text-xs text-gray-400 mt-1">
+                                 Run privately on your Mac. Download models below.
+                             </p>
+                         </div>
+
+                         <div className="flex-1 overflow-y-auto p-4">
+                             <div className="space-y-2">
+                                 {offlineModels.map((model) => (
+                                     <div key={model.id} className="flex flex-col p-3 rounded-lg bg-[#2A2A2A] border border-white/5 hover:bg-[#333] transition-colors group">
+                                         <div className="flex items-center justify-between">
+                                            <div className="flex items-center space-x-3">
+                                                <div className="w-8 h-8 rounded bg-black/40 flex items-center justify-center">
+                                                    <HardDrive size={14} className="text-gray-500 group-hover:text-[#28C840] transition-colors"/>
+                                                </div>
+                                                <div>
+                                                    <div className="text-sm font-medium text-white">{model.name}</div>
+                                                    <div className="text-[10px] text-gray-500">{model.desc} • {model.size}</div>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                {model.status === 'downloaded' ? (
+                                                     <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded text-xs text-[#28C840] font-medium">
+                                                         <Check size={12}/>
+                                                         <span>Ready</span>
+                                                     </div>
+                                                ) : model.status === 'downloading' ? (
+                                                     <div className="flex items-center space-x-1.5 px-3 py-1.5 text-xs text-gray-400">
+                                                         <Loader2 size={12} className="animate-spin"/>
+                                                         <span>{Math.round(model.progress || 0)}%</span>
+                                                     </div>
+                                                ) : (
+                                                    <button 
+                                                        onClick={() => onDownloadModel(model.id)}
+                                                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#1A1A1A] hover:bg-[#28C840] hover:text-white rounded border border-white/10 text-xs text-gray-300 transition-all"
+                                                    >
+                                                        <Download size={12}/>
+                                                        <span>Get</span>
+                                                    </button>
+                                                )}
+                                            </div>
+                                         </div>
+                                         {/* Progress Bar for Models */}
+                                         {model.status === 'downloading' && (
+                                            <div className="mt-2 w-full h-1 bg-black/50 rounded-full overflow-hidden">
+                                                <div 
+                                                    className="h-full bg-[#28C840] transition-all duration-200 ease-out"
+                                                    style={{ width: `${model.progress}%` }}
+                                                ></div>
+                                            </div>
+                                         )}
+                                     </div>
+                                 ))}
+                             </div>
+                         </div>
+                    </div>
+
                 </div>
              </div>
           )}
 
           {/* EXTRA TOOLS TAB */}
           {activeTab === 'tools' && (
-              <div className="h-full flex flex-col">
-                  <div className="mb-4">
+              <div className="p-8 h-full overflow-y-auto">
+                  <div className="mb-6">
                       <h3 className="text-base font-semibold text-white">Available direct download packages</h3>
+                      <p className="text-xs text-gray-500 mt-1">Tools required for complex file operations</p>
                   </div>
-                  <div className="space-y-0.5">
-                      {EXTRA_TOOLS.map((tool, idx) => (
-                          <div key={idx} className="flex items-center justify-between py-3 border-b border-white/5 last:border-0 group hover:bg-white/5 px-2 -mx-2 rounded">
-                              <div className="flex items-start space-x-3">
-                                  {tool.status === 'installed' ? (
-                                      <div className="w-5 h-5 rounded-full bg-[#28C840] flex items-center justify-center mt-0.5">
-                                          <Check size={12} className="text-black font-bold"/>
-                                      </div>
-                                  ) : (
-                                      <div className="w-5 h-5 rounded-full border border-gray-600 mt-0.5"></div>
-                                  )}
-                                  <div>
-                                      <div className="text-sm font-medium text-white">{tool.name}</div>
-                                      <div className="text-xs text-gray-400 flex items-center space-x-1">
-                                          <span>{tool.desc}</span>
-                                          <span className="text-gray-600">•</span>
-                                          <span className="text-[#00A6F4]">{tool.license}</span>
-                                          <span className="text-gray-600">•</span>
-                                          <a href="#" className="text-[#00A6F4] hover:underline">Source</a>
+                  <div className="space-y-1">
+                      {tools.map((tool) => (
+                          <div key={tool.id} className="flex flex-col py-3 border-b border-white/5 last:border-0 group hover:bg-white/5 px-3 -mx-3 rounded transition-colors">
+                              <div className="flex items-center justify-between">
+                                  <div className="flex items-start space-x-4">
+                                      {tool.status === 'installed' ? (
+                                          <div className="w-5 h-5 rounded-full bg-[#28C840] flex items-center justify-center mt-0.5 shadow-sm">
+                                              <Check size={12} className="text-black font-bold"/>
+                                          </div>
+                                      ) : tool.status === 'installing' ? (
+                                          <div className="w-5 h-5 mt-0.5">
+                                               <Loader2 size={18} className="animate-spin text-[#00A6F4]"/>
+                                          </div>
+                                      ) : (
+                                          <div className="w-5 h-5 rounded-full border border-gray-600 mt-0.5"></div>
+                                      )}
+                                      <div>
+                                          <div className="text-sm font-medium text-white">{tool.name}</div>
+                                          <div className="text-xs text-gray-400 flex items-center space-x-1 mt-0.5">
+                                              <span>{tool.desc}</span>
+                                              <span className="text-gray-600">•</span>
+                                              <span className="text-[#00A6F4] opacity-80">{tool.license}</span>
+                                          </div>
                                       </div>
                                   </div>
+                                  <div>
+                                      {tool.status === 'installed' ? (
+                                          <button 
+                                            onClick={() => onUninstallTool(tool.id)}
+                                            className="flex items-center space-x-1.5 px-3 py-1 bg-[#3A3A3A] hover:bg-[#FF453A]/20 hover:text-[#FF453A] rounded text-xs text-gray-400 transition-colors border border-white/5"
+                                          >
+                                              <Trash2 size={12}/>
+                                              <span>Uninstall</span>
+                                          </button>
+                                      ) : tool.status === 'installing' ? (
+                                          <span className="text-xs text-gray-500 italic px-3 py-1">Installing...</span>
+                                      ) : (
+                                          <button 
+                                            onClick={() => onInstallTool(tool.id)}
+                                            className="flex items-center space-x-1.5 px-3 py-1 bg-[#3A3A3A] hover:bg-[#00A6F4] hover:text-white rounded text-xs text-white transition-colors border border-white/5"
+                                          >
+                                              <Cloud size={12}/>
+                                              <span>Install</span>
+                                          </button>
+                                      )}
+                                  </div>
                               </div>
-                              <div>
-                                  {tool.status === 'installed' ? (
-                                      <button className="flex items-center space-x-1.5 px-3 py-1 bg-[#3A3A3A] hover:bg-[#4A4A4A] rounded text-xs text-[#FF453A] transition-colors border border-white/5">
-                                          <Trash2 size={12}/>
-                                          <span>Uninstall</span>
-                                      </button>
-                                  ) : (
-                                      <button className="flex items-center space-x-1.5 px-3 py-1 bg-[#3A3A3A] hover:bg-[#4A4A4A] rounded text-xs text-white transition-colors border border-white/5">
-                                          <Cloud size={12}/>
-                                          <span>Install</span>
-                                      </button>
-                                  )}
-                              </div>
+                              
+                              {/* Progress bar for tools */}
+                              {tool.status === 'installing' && (
+                                  <div className="mt-2 w-full h-1 bg-black/50 rounded-full overflow-hidden ml-9">
+                                      <div 
+                                        className="h-full bg-[#00A6F4] transition-all duration-200 ease-out"
+                                        style={{ width: `${tool.progress}%` }}
+                                      ></div>
+                                  </div>
+                              )}
                           </div>
                       ))}
                   </div>
@@ -260,19 +354,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* ABOUT TAB */}
           {activeTab === 'about' && (
-              <div className="h-full flex flex-col items-center justify-center text-center">
-                  <div className="w-24 h-24 bg-gradient-to-br from-[#FF9F0A] to-[#FF453A] rounded-2xl shadow-lg flex items-center justify-center mb-6">
-                      <HardDrive size={48} className="text-white"/>
+              <div className="h-full flex flex-col items-center justify-center text-center p-8">
+                  <div className="w-24 h-24 bg-gradient-to-br from-[#FF9F0A] to-[#FF453A] rounded-2xl shadow-2xl flex items-center justify-center mb-6 ring-1 ring-white/10">
+                      <HardDrive size={48} className="text-white drop-shadow-md"/>
                   </div>
                   <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">LOCAL AI</h1>
                   <p className="text-gray-400 text-sm">Version 1.0 (Simulation)</p>
                   
-                  <div className="mt-8 text-sm text-gray-500">
-                      <p>Made by</p>
-                      <p className="text-white font-medium mt-1">Enzo Nassif</p>
+                  <div className="mt-8 text-sm text-gray-500 bg-[#222] py-4 px-12 rounded-xl border border-white/5">
+                      <p>Created by</p>
+                      <p className="text-white font-medium mt-1 text-base">Enzo Nassif</p>
                   </div>
 
-                  <div className="mt-12 text-xs text-gray-600">
+                  <div className="mt-12 text-xs text-gray-600 space-y-1">
                       <p>© 2025 Substage Simulation.</p>
                       <p>All rights reserved.</p>
                   </div>
@@ -280,8 +374,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
 
            {activeTab === 'general' && (
-             <div className="flex items-center justify-center h-full text-gray-500">
-                 General settings not available in this demo.
+             <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                 <div className="p-4 rounded-full bg-white/5 mb-4">
+                    <Info size={32} className="opacity-50"/>
+                 </div>
+                 <p>General settings not available in this demo.</p>
              </div>
            )}
         </div>

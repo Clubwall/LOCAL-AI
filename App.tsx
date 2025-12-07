@@ -1,11 +1,12 @@
+
 import React, { useState, useCallback } from 'react';
 import FinderWindow from './components/FinderWindow';
 import InputBar from './components/InputBar';
 import SettingsModal from './components/SettingsModal';
 import CommandConfirmation from './components/CommandConfirmation';
 import { generateTerminalCommand } from './services/geminiService';
-import { AutoRunSettings, CommandCategory, GeneratedCommand, FileSystemItem, FileType } from './types';
-import { INITIAL_FILE_SYSTEM } from './constants';
+import { AutoRunSettings, CommandCategory, GeneratedCommand, FileSystemItem, FileType, ToolItem, OfflineModelItem } from './types';
+import { INITIAL_FILE_SYSTEM, INITIAL_EXTRA_TOOLS, INITIAL_OFFLINE_AI_MODELS } from './constants';
 
 const DEFAULT_SETTINGS: AutoRunSettings = {
   harmless: true,
@@ -20,6 +21,9 @@ const App: React.FC = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<AutoRunSettings>(DEFAULT_SETTINGS);
   const [fileSystem, setFileSystem] = useState<FileSystemItem[]>(INITIAL_FILE_SYSTEM);
+  const [tools, setTools] = useState<ToolItem[]>(INITIAL_EXTRA_TOOLS);
+  const [offlineModels, setOfflineModels] = useState<OfflineModelItem[]>(INITIAL_OFFLINE_AI_MODELS);
+  
   const [isProcessing, setIsProcessing] = useState(false);
   const [pendingCommand, setPendingCommand] = useState<GeneratedCommand | null>(null);
   const [lastStatus, setLastStatus] = useState<'success' | 'error' | null>(null);
@@ -27,6 +31,46 @@ const App: React.FC = () => {
 
   // We hardcode the path to Enzo's home for the demo
   const currentPath = ['root', 'users', 'enzo']; 
+
+  // --- Tool & Model Management ---
+
+  const handleInstallTool = (toolId: string) => {
+    setTools(prev => prev.map(t => t.id === toolId ? { ...t, status: 'installing', progress: 0 } : t));
+    
+    // Simulate install process
+    let progress = 0;
+    const interval = setInterval(() => {
+        progress += Math.floor(Math.random() * 15) + 5;
+        if (progress >= 100) {
+            progress = 100;
+            clearInterval(interval);
+            setTools(prev => prev.map(t => t.id === toolId ? { ...t, status: 'installed', progress: 0 } : t));
+        } else {
+            setTools(prev => prev.map(t => t.id === toolId ? { ...t, progress } : t));
+        }
+    }, 200);
+  };
+
+  const handleUninstallTool = (toolId: string) => {
+      setTools(prev => prev.map(t => t.id === toolId ? { ...t, status: 'available' } : t));
+  };
+
+  const handleDownloadModel = (modelId: string) => {
+      setOfflineModels(prev => prev.map(m => m.id === modelId ? { ...m, status: 'downloading', progress: 0 } : m));
+
+      // Simulate download process (slower than tools)
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += Math.random() * 3; // Slow download
+        if (progress >= 100) {
+            progress = 100;
+            clearInterval(interval);
+            setOfflineModels(prev => prev.map(m => m.id === modelId ? { ...m, status: 'downloaded', progress: 0 } : m));
+        } else {
+            setOfflineModels(prev => prev.map(m => m.id === modelId ? { ...m, progress } : m));
+        }
+      }, 100);
+  };
 
   const handleCommandExecution = useCallback(async (cmd: GeneratedCommand) => {
     // Simulate execution delay
@@ -36,7 +80,6 @@ const App: React.FC = () => {
     await new Promise(resolve => setTimeout(resolve, 600)); // Fake terminal lag
 
     const newFS = [...fileSystem];
-    // Find 'enzo' folder. Structure: root -> Users -> Enzo
     const root = newFS.find(f => f.id === 'root');
     const users = root?.children?.find(f => f.id === 'users');
     const enzoFolder = users?.children?.find(f => f.id === 'enzo');
@@ -50,15 +93,9 @@ const App: React.FC = () => {
             
             // --- MKDIR: Create Folder ---
             if (subCmd.startsWith('mkdir')) {
-                // Simple heuristic to extract folder name
-                let folderName = subCmd
-                    .replace(/^mkdir\s+(-p\s+)?/, '')
-                    .trim()
-                    .replace(/["']/g, '');
-
+                let folderName = subCmd.replace(/^mkdir\s+(-p\s+)?/, '').trim().replace(/["']/g, '');
                 if (!folderName) folderName = `Untitled Folder`;
                 
-                // Avoid duplicate if possible
                 if (!enzoFolder.children.find(c => c.name === folderName)) {
                      const newFolder: FileSystemItem = {
                         id: `folder-${Date.now()}-${Math.random()}`,
@@ -91,13 +128,11 @@ const App: React.FC = () => {
             }
             // --- MV: Move or Rename ---
             else if (subCmd.startsWith('mv')) {
-                // mv source destination
                 const parts = subCmd.split(/\s+/);
                 if (parts.length >= 3) {
                     const sourceName = parts[1].replace(/["']/g, '');
                     const destName = parts[2].replace(/["']/g, '');
                     
-                    // 1. Find source in current folder
                     let itemsToMove: number[] = [];
                     
                     if (sourceName.startsWith('*.')) {
@@ -111,18 +146,14 @@ const App: React.FC = () => {
                     }
 
                     itemsToMove.sort((a, b) => b - a);
-
                     const destFolder = enzoFolder.children.find(c => c.name === destName && c.type === FileType.FOLDER);
 
                     for (const idx of itemsToMove) {
                         const item = enzoFolder.children[idx];
-                        
                         if (destFolder && destFolder.children) {
-                            // Move to folder
                             enzoFolder.children.splice(idx, 1);
                             destFolder.children.push({...item, parentId: destFolder.id});
                         } else if (itemsToMove.length === 1 && !destName.includes('/')) {
-                            // Rename 
                             item.name = destName;
                             enzoFolder.children[idx] = {...item};
                         }
@@ -131,44 +162,47 @@ const App: React.FC = () => {
             }
             // --- RM: Delete ---
             else if (subCmd.startsWith('rm')) {
-                // Better parsing for rm. Handle flags like -rf.
-                // rm -rf "file name.png" -> split by space might break quoted strings, 
-                // but for this simple sim we try to strip flags and look for the filename at the end
-                // or match exact names in the folder.
-                
                 const parts = subCmd.split(/\s+/);
-                // Remove 'rm' and flags starting with '-'
                 const potentialNames = parts.filter(p => p !== 'rm' && !p.startsWith('-'));
-                
-                // Usually the last arg is the file, but we should try to match any arg to a file
                 let deletedCount = 0;
-                
                 potentialNames.forEach(rawName => {
                     const name = rawName.replace(/["']/g, '').trim();
-                     const idx = enzoFolder.children.findIndex(c => c.name === name);
+                     let idx = enzoFolder.children.findIndex(c => c.name === name);
+                     if (idx === -1) idx = enzoFolder.children.findIndex(c => c.name.toLowerCase() === name.toLowerCase());
+
                      if (idx !== -1) {
                          enzoFolder.children.splice(idx, 1);
                          deletedCount++;
                      }
                 });
 
-                // Fallback: if user typed "delete screenshot", LLM might output "rm Screenshot.png".
-                // If it output "rm ./Screenshot.png", we handle that:
                 if (deletedCount === 0 && potentialNames.length > 0) {
                      let cleanName = potentialNames[potentialNames.length - 1].replace(/["']/g, '').trim();
                      if (cleanName.startsWith('./')) cleanName = cleanName.substring(2);
-                     
-                     const idx = enzoFolder.children.findIndex(c => c.name === cleanName);
-                     if (idx !== -1) {
-                         enzoFolder.children.splice(idx, 1);
-                     }
+                     let idx = enzoFolder.children.findIndex(c => c.name === cleanName);
+                     if (idx === -1) idx = enzoFolder.children.findIndex(c => c.name.toLowerCase() === cleanName.toLowerCase());
+
+                     if (idx !== -1) enzoFolder.children.splice(idx, 1);
                 }
             }
             // --- FFMPEG: Convert (Mock) ---
             else if (subCmd.includes('ffmpeg')) {
+                // REALISTIC CHECK: Is FFmpeg installed?
+                const ffmpegTool = tools.find(t => t.id === 'ffmpeg');
+                if (!ffmpegTool || ffmpegTool.status !== 'installed') {
+                     setStatusMessage('Error: FFmpeg not installed');
+                     setLastStatus('error');
+                     setIsProcessing(false);
+                     setTimeout(() => {
+                        setStatusMessage('');
+                        setLastStatus(null);
+                     }, 3000);
+                     return; // STOP EXECUTION
+                }
+
                  const newFile: FileSystemItem = {
                     id: `gen-${Date.now()}`,
-                    name: 'ScreenRecording_2025.mp3', // Mock result
+                    name: 'ScreenRecording_2025.mp3', 
                     type: FileType.FILE,
                     size: '12 MB',
                     dateModified: 'Just now',
@@ -190,7 +224,7 @@ const App: React.FC = () => {
         setLastStatus(null);
     }, 2000);
 
-  }, [fileSystem]);
+  }, [fileSystem, tools]);
 
 
   const handleSubmit = async (query: string) => {
@@ -283,6 +317,11 @@ const App: React.FC = () => {
             onClose={() => setSettingsOpen(false)}
             settings={settings}
             onSettingsChange={setSettings}
+            tools={tools}
+            onInstallTool={handleInstallTool}
+            onUninstallTool={handleUninstallTool}
+            offlineModels={offlineModels}
+            onDownloadModel={handleDownloadModel}
         />
         
         <div className="absolute bottom-4 right-4 text-white/20 text-xs pointer-events-none">
