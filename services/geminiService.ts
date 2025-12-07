@@ -1,25 +1,29 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { CommandCategory, GeneratedCommand } from '../types';
-
-// NOTE: In a real production app, you might want to handle the API key more securely.
-// Since this is a client-side demo, we rely on the environment variable injection.
-const apiKey = process.env.API_KEY || ''; 
-const ai = new GoogleGenAI({ apiKey });
 
 const MODEL_NAME = 'gemini-2.5-flash';
 
 export const generateTerminalCommand = async (
   userQuery: string,
-  currentDirectoryContext: string
+  currentDirectoryContext: string,
+  fileListContext: string = '',
+  customApiKey?: string
 ): Promise<GeneratedCommand> => {
   
-  if (!apiKey) {
+  // Prioritize custom user key, then fallback to env var
+  const effectiveKey = customApiKey || process.env.API_KEY || '';
+
+  if (!effectiveKey) {
     return {
       command: "echo 'Error: API Key missing'",
       category: CommandCategory.HARMLESS,
-      explanation: "Please configure your Gemini API Key to use this feature."
+      explanation: "Please configure your Gemini API Key in Settings > Online Models to use this feature."
     };
   }
+
+  // Initialize client dynamically to use the correct key
+  const ai = new GoogleGenAI({ apiKey: effectiveKey });
 
   const prompt = `
     You are an AI assistant for a macOS terminal helper tool called "Substage". 
@@ -27,10 +31,14 @@ export const generateTerminalCommand = async (
     
     The user is currently in this directory: ${currentDirectoryContext}
     
+    The files currently in this directory are:
+    ${fileListContext}
+    
     The user query is: "${userQuery}"
 
     Rules for the simulation:
     - Prefer simple, standard commands: mkdir, touch, mv, cp, rm, ffmpeg.
+    - IMPORTANT: Use the exact filenames provided in the list above. If the user says "delete screenshot", and the list has "Screenshot.png", use "rm Screenshot.png".
     - If the user wants to organize files (e.g., "put all images in a folder"), generate a CHAINED command using '&&'. 
       Example: "mkdir Images && mv *.png Images/"
     - Keep paths relative if possible.
@@ -77,9 +85,9 @@ export const generateTerminalCommand = async (
   } catch (error) {
     console.error("Gemini API Error:", error);
     return {
-      command: "",
+      command: "echo 'Error generating command'",
       category: CommandCategory.UNKNOWN,
-      explanation: "Failed to generate command. Please try again."
+      explanation: "Failed to generate command due to an API error."
     };
   }
 };

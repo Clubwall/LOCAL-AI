@@ -15,9 +15,9 @@ const CommandConfirmation: React.FC<CommandConfirmationProps> = ({ command, onCo
   const isDestructive = command.category === CommandCategory.DELETE || command.category === CommandCategory.UNKNOWN;
 
   return (
-    <div className={`absolute z-50 bg-[#2A2A2A] rounded-lg shadow-xl border border-white/10 overflow-hidden flex flex-col w-[90%] max-w-2xl ${className}`}>
+    <div className={`bg-[#2A2A2A]/95 backdrop-blur-md rounded-lg shadow-[0_8px_30px_rgb(0,0,0,0.5)] border border-white/10 overflow-hidden flex flex-col w-[90%] max-w-2xl transition-all animate-in fade-in slide-in-from-bottom-4 duration-200 ${className}`}>
       
-        <div className="flex items-center p-3 gap-3 bg-[#333]">
+        <div className="flex items-center p-3 gap-3 bg-[#333]/90 border-b border-black/20">
              <div className={`p-1.5 rounded bg-black/20 ${isDestructive ? 'text-red-400' : 'text-blue-400'}`}>
                 {isDestructive ? <AlertTriangle size={14} /> : <Terminal size={14} />}
              </div>
@@ -35,18 +35,18 @@ const CommandConfirmation: React.FC<CommandConfirmationProps> = ({ command, onCo
              </div>
         </div>
 
-        <div className="p-3 bg-[#1E1E1E] font-mono text-xs text-green-400 border-t border-b border-black/20 break-all">
+        <div className="p-3 bg-[#1E1E1E]/80 font-mono text-xs text-green-400 break-all select-text">
             {command.command}
         </div>
 
-        <div className="p-2 bg-[#262626] flex justify-end">
+        <div className="p-2 bg-[#262626]/90 flex justify-end border-t border-black/20">
              <button 
                 onClick={onConfirm}
-                className={`flex items-center space-x-1 px-3 py-1 rounded text-xs font-medium text-white transition-colors ${
-                    isDestructive ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+                className={`flex items-center space-x-1 px-4 py-1.5 rounded text-xs font-medium text-white transition-all shadow-md active:scale-95 ${
+                    isDestructive ? 'bg-red-600 hover:bg-red-500' : 'bg-blue-600 hover:bg-blue-500'
                 }`}
             >
-                <span>Run</span>
+                <span>Run Command</span>
                 <ArrowRight size={12} />
             </button>
         </div>

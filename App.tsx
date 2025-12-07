@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import FinderWindow from './components/FinderWindow';
 import InputBar from './components/InputBar';
 import SettingsModal from './components/SettingsModal';
@@ -9,20 +9,48 @@ import { AutoRunSettings, CommandCategory, GeneratedCommand, FileSystemItem, Fil
 import { INITIAL_FILE_SYSTEM, INITIAL_EXTRA_TOOLS, INITIAL_OFFLINE_AI_MODELS } from './constants';
 
 const DEFAULT_SETTINGS: AutoRunSettings = {
-  harmless: true,
-  create: true,
-  rename: true,
-  move: true,
-  delete: false,
-  modify: false
+  harmless: false,
+  create: false,
+  rename: false,
+  move: false,
+  modify: false,
+  changeOutside: false,
+  minorSideEffects: false,
+  significantSideEffects: false,
+  moveToTrash: false,
+  deleteOverwrite: false,
+  unknownScripts: false,
+  commandsWithErrors: false
 };
 
 const App: React.FC = () => {
+  // Initialize state with lazy initializers to check localStorage
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settings, setSettings] = useState<AutoRunSettings>(DEFAULT_SETTINGS);
-  const [fileSystem, setFileSystem] = useState<FileSystemItem[]>(INITIAL_FILE_SYSTEM);
-  const [tools, setTools] = useState<ToolItem[]>(INITIAL_EXTRA_TOOLS);
-  const [offlineModels, setOfflineModels] = useState<OfflineModelItem[]>(INITIAL_OFFLINE_AI_MODELS);
+  
+  const [settings, setSettings] = useState<AutoRunSettings>(() => {
+    const saved = localStorage.getItem('substage_settings');
+    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+  });
+
+  const [fileSystem, setFileSystem] = useState<FileSystemItem[]>(() => {
+    const saved = localStorage.getItem('substage_filesystem');
+    return saved ? JSON.parse(saved) : INITIAL_FILE_SYSTEM;
+  });
+
+  const [tools, setTools] = useState<ToolItem[]>(() => {
+    const saved = localStorage.getItem('substage_tools');
+    return saved ? JSON.parse(saved) : INITIAL_EXTRA_TOOLS;
+  });
+
+  const [offlineModels, setOfflineModels] = useState<OfflineModelItem[]>(() => {
+    const saved = localStorage.getItem('substage_models');
+    return saved ? JSON.parse(saved) : INITIAL_OFFLINE_AI_MODELS;
+  });
+
+  const [apiKeys, setApiKeys] = useState<Record<string, string>>(() => {
+    const saved = localStorage.getItem('substage_apikeys');
+    return saved ? JSON.parse(saved) : {};
+  });
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [pendingCommand, setPendingCommand] = useState<GeneratedCommand | null>(null);
@@ -31,6 +59,22 @@ const App: React.FC = () => {
 
   // We hardcode the path to Enzo's home for the demo
   const currentPath = ['root', 'users', 'enzo']; 
+
+  // --- Persistence Effects ---
+  useEffect(() => { localStorage.setItem('substage_settings', JSON.stringify(settings)); }, [settings]);
+  useEffect(() => { localStorage.setItem('substage_filesystem', JSON.stringify(fileSystem)); }, [fileSystem]);
+  useEffect(() => { localStorage.setItem('substage_tools', JSON.stringify(tools)); }, [tools]);
+  useEffect(() => { localStorage.setItem('substage_models', JSON.stringify(offlineModels)); }, [offlineModels]);
+  useEffect(() => { localStorage.setItem('substage_apikeys', JSON.stringify(apiKeys)); }, [apiKeys]);
+
+
+  // --- Helper to get file context ---
+  const getEnzoFiles = useCallback(() => {
+    const root = fileSystem.find(f => f.id === 'root');
+    const users = root?.children?.find(f => f.id === 'users');
+    const enzo = users?.children?.find(f => f.id === 'enzo');
+    return enzo?.children?.map(c => c.name).join(', ') || '';
+  }, [fileSystem]);
 
   // --- Tool & Model Management ---
 
@@ -79,13 +123,18 @@ const App: React.FC = () => {
     
     await new Promise(resolve => setTimeout(resolve, 600)); // Fake terminal lag
 
-    const newFS = [...fileSystem];
-    const root = newFS.find(f => f.id === 'root');
-    const users = root?.children?.find(f => f.id === 'users');
-    const enzoFolder = users?.children?.find(f => f.id === 'enzo');
+    try {
+        // Deep clone to ensure React state updates trigger correctly and avoid mutation issues
+        const newFS = JSON.parse(JSON.stringify(fileSystem)) as FileSystemItem[];
+        const root = newFS.find(f => f.id === 'root');
+        const users = root?.children?.find(f => f.id === 'users');
+        const enzoFolder = users?.children?.find(f => f.id === 'enzo');
 
-    if (enzoFolder && enzoFolder.children) {
-        
+        if (!enzoFolder) throw new Error("Critical Error: Home directory not found.");
+
+        // Fallback for safety if children array is missing
+        if (!enzoFolder.children) enzoFolder.children = [];
+
         // Support chained commands via && (e.g. mkdir folder && mv file folder)
         const subCommands = cmd.command.split('&&').map(c => c.trim());
 
@@ -143,6 +192,8 @@ const App: React.FC = () => {
                     } else {
                         const idx = enzoFolder.children.findIndex(c => c.name === sourceName);
                         if (idx !== -1) itemsToMove.push(idx);
+                        // Safe check: prevent error if file doesn't exist (simulated robustness)
+                        else console.warn(`Skipping move: Source ${sourceName} not found`);
                     }
 
                     itemsToMove.sort((a, b) => b - a);
@@ -162,42 +213,40 @@ const App: React.FC = () => {
             }
             // --- RM: Delete ---
             else if (subCmd.startsWith('rm')) {
-                const parts = subCmd.split(/\s+/);
-                const potentialNames = parts.filter(p => p !== 'rm' && !p.startsWith('-'));
-                let deletedCount = 0;
-                potentialNames.forEach(rawName => {
-                    const name = rawName.replace(/["']/g, '').trim();
-                     let idx = enzoFolder.children.findIndex(c => c.name === name);
-                     if (idx === -1) idx = enzoFolder.children.findIndex(c => c.name.toLowerCase() === name.toLowerCase());
-
-                     if (idx !== -1) {
-                         enzoFolder.children.splice(idx, 1);
-                         deletedCount++;
-                     }
-                });
-
-                if (deletedCount === 0 && potentialNames.length > 0) {
-                     let cleanName = potentialNames[potentialNames.length - 1].replace(/["']/g, '').trim();
-                     if (cleanName.startsWith('./')) cleanName = cleanName.substring(2);
-                     let idx = enzoFolder.children.findIndex(c => c.name === cleanName);
-                     if (idx === -1) idx = enzoFolder.children.findIndex(c => c.name.toLowerCase() === cleanName.toLowerCase());
-
-                     if (idx !== -1) enzoFolder.children.splice(idx, 1);
+                const rawArgs = subCmd.replace(/^rm\s+/, '').trim();
+                let targets = [rawArgs];
+                
+                if (!rawArgs.includes('"') && !rawArgs.includes("'")) {
+                    targets = rawArgs.split(/\s+/).filter(t => !t.startsWith('-'));
+                } else {
+                    targets = [rawArgs.replace(/^["']|["']$/g, '')];
                 }
+
+                targets.forEach(targetName => {
+                    const cleanName = targetName.replace(/^["']|["']$/g, '');
+                    const idx = enzoFolder.children.findIndex(c => 
+                        c.name === cleanName || c.name.toLowerCase() === cleanName.toLowerCase()
+                    );
+                    
+                    if (idx !== -1) {
+                        enzoFolder.children.splice(idx, 1);
+                    }
+                });
             }
             // --- FFMPEG: Convert (Mock) ---
             else if (subCmd.includes('ffmpeg')) {
                 // REALISTIC CHECK: Is FFmpeg installed?
                 const ffmpegTool = tools.find(t => t.id === 'ffmpeg');
                 if (!ffmpegTool || ffmpegTool.status !== 'installed') {
-                     setStatusMessage('Error: FFmpeg not installed');
-                     setLastStatus('error');
-                     setIsProcessing(false);
-                     setTimeout(() => {
-                        setStatusMessage('');
-                        setLastStatus(null);
-                     }, 3000);
-                     return; // STOP EXECUTION
+                     throw new Error("FFmpeg not installed. Please install it in 'Extra Tools'.");
+                }
+                
+                // Parse source file from command "ffmpeg -i Source.mp4 ..."
+                const match = subCmd.match(/-i\s+["']?([^"'\s]+)["']?/);
+                const sourceFile = match ? match[1] : null;
+
+                if (sourceFile && !enzoFolder.children.some(c => c.name === sourceFile)) {
+                     throw new Error(`File '${sourceFile}' not found.`);
                 }
 
                  const newFile: FileSystemItem = {
@@ -212,17 +261,22 @@ const App: React.FC = () => {
                 enzoFolder.children.unshift(newFile);
             }
         }
-    }
 
-    setFileSystem(newFS);
-    setLastStatus('success');
-    setStatusMessage('Done.');
-    setIsProcessing(false);
-    
-    setTimeout(() => {
-        setStatusMessage('');
-        setLastStatus(null);
-    }, 2000);
+        setFileSystem(newFS);
+        setLastStatus('success');
+        setStatusMessage('Done.');
+        
+    } catch (error: any) {
+        console.error("Execution Error:", error);
+        setLastStatus('error');
+        setStatusMessage(error.message || 'Execution failed');
+    } finally {
+        setIsProcessing(false);
+        setTimeout(() => {
+            setStatusMessage('');
+            setLastStatus(null);
+        }, 3000);
+    }
 
   }, [fileSystem, tools]);
 
@@ -233,7 +287,16 @@ const App: React.FC = () => {
     setStatusMessage('Thinking...');
 
     try {
-      const generated = await generateTerminalCommand(query, "~/Users/Enzo/");
+      const fileContext = getEnzoFiles();
+      // Use Google API Key if available
+      const googleKey = apiKeys['google'];
+      
+      const generated = await generateTerminalCommand(
+          query, 
+          "~/Users/Enzo/", 
+          fileContext,
+          googleKey
+      );
       
       setIsProcessing(false);
 
@@ -265,8 +328,9 @@ const App: React.FC = () => {
       case CommandCategory.CREATE: return settings.create;
       case CommandCategory.RENAME: return settings.rename;
       case CommandCategory.MOVE: return settings.move;
-      case CommandCategory.DELETE: return settings.delete;
+      case CommandCategory.DELETE: return settings.moveToTrash; // Mapped to moveToTrash
       case CommandCategory.MODIFY: return settings.modify;
+      case CommandCategory.UNKNOWN: return settings.unknownScripts;
       default: return false; 
     }
   };
@@ -280,23 +344,13 @@ const App: React.FC = () => {
         <div className="relative z-10 flex flex-col items-center shadow-2xl rounded-lg overflow-hidden border border-[#3A3A3A] bg-[#1E1E1E]">
             
             {/* Finder Window Area */}
-            <div className="w-[900px] h-[550px] relative">
+            <div className="w-[900px] h-[550px] relative z-0">
                <FinderWindow currentPath={currentPath} fileSystem={fileSystem} />
             </div>
 
-            {/* Glued Input Bar */}
-            <InputBar 
-                onOpenSettings={() => setSettingsOpen(true)}
-                onSubmit={handleSubmit}
-                isProcessing={isProcessing}
-                lastCommandStatus={lastStatus}
-                statusMessage={statusMessage}
-                className="bg-[#1E1E1E] w-[900px]" 
-            />
-
-            {/* Contextual Minimal Confirmation (Anchored to bottom) */}
-             <div className="absolute bottom-16 w-full flex justify-center pointer-events-none">
-                 <div className="pointer-events-auto">
+            {/* Contextual Minimal Confirmation (Anchored to bottom above input bar) */}
+             <div className="absolute bottom-[54px] w-full flex justify-center pointer-events-none z-50 px-4">
+                 <div className="pointer-events-auto w-full max-w-2xl">
                     <CommandConfirmation 
                         command={pendingCommand}
                         onCancel={() => setPendingCommand(null)}
@@ -310,6 +364,18 @@ const App: React.FC = () => {
                     />
                 </div>
             </div>
+
+            {/* Glued Input Bar */}
+            <div className="relative z-20 w-[900px]">
+                <InputBar 
+                    onOpenSettings={() => setSettingsOpen(true)}
+                    onSubmit={handleSubmit}
+                    isProcessing={isProcessing}
+                    lastCommandStatus={lastStatus}
+                    statusMessage={statusMessage}
+                    className="bg-[#1E1E1E]" 
+                />
+            </div>
         </div>
 
         <SettingsModal 
@@ -322,6 +388,8 @@ const App: React.FC = () => {
             onUninstallTool={handleUninstallTool}
             offlineModels={offlineModels}
             onDownloadModel={handleDownloadModel}
+            apiKeys={apiKeys}
+            onApiKeysChange={setApiKeys}
         />
         
         <div className="absolute bottom-4 right-4 text-white/20 text-xs pointer-events-none">

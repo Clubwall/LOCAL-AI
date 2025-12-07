@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { X, Info, Check, Download, Trash2, Cloud, HardDrive, Key, ExternalLink, Globe, Server, Loader2 } from 'lucide-react';
+import { X, Info, Check, Download, Trash2, Cloud, HardDrive, Key, ExternalLink, Globe, Server, Loader2, Package, CheckCircle, Terminal, AlertCircle } from 'lucide-react';
 import { SETTINGS_TABS, CATEGORY_LABELS, ONLINE_AI_PROVIDERS } from '../constants';
 import { AutoRunSettings, CommandCategory, ToolItem, OfflineModelItem } from '../types';
 
@@ -14,6 +14,8 @@ interface SettingsModalProps {
   onUninstallTool: (id: string) => void;
   offlineModels: OfflineModelItem[];
   onDownloadModel: (id: string) => void;
+  apiKeys: Record<string, string>;
+  onApiKeysChange: (newKeys: Record<string, string>) => void;
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -25,11 +27,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onInstallTool,
   onUninstallTool,
   offlineModels,
-  onDownloadModel
+  onDownloadModel,
+  apiKeys,
+  onApiKeysChange
 }) => {
   const [activeTab, setActiveTab] = useState('autorun');
-  // Mock state for API keys
-  const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
+  
+  // Export Simulation State
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [exportStep, setExportStep] = useState('');
+  const [exportComplete, setExportComplete] = useState(false);
 
   if (!isOpen) return null;
 
@@ -41,7 +49,182 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleApiKeyChange = (providerId: string, value: string) => {
-    setApiKeys(prev => ({ ...prev, [providerId]: value }));
+    onApiKeysChange({ ...apiKeys, [providerId]: value });
+  };
+
+  const downloadBuildScript = () => {
+    const scriptContent = `#!/bin/bash
+
+# -----------------------------------------------------------------------------
+# Substage Local Installer Generator
+# -----------------------------------------------------------------------------
+# This script scaffolds a minimal Electron environment to build a valid .dmg
+# for macOS. Run this in your terminal to generate the app.
+# -----------------------------------------------------------------------------
+
+APP_NAME="Substage"
+DIR_NAME="Substage_Build_$(date +%s)"
+
+# Colors
+GREEN='\\033[0;32m'
+BLUE='\\033[0;34m'
+RED='\\033[0;31m'
+NC='\\033[0m' # No Color
+
+echo -e "\${BLUE}🚀 Starting Substage Installer Generator...\${NC}"
+
+# Check for Node.js
+if ! command -v npm &> /dev/null; then
+    echo -e "\${RED}❌ Error: npm (Node.js) is not installed.\${NC}"
+    echo "Please install Node.js from https://nodejs.org/ and try again."
+    exit 1
+fi
+
+echo -e "\${BLUE}📂 Creating project directory: $DIR_NAME\${NC}"
+mkdir "$DIR_NAME"
+cd "$DIR_NAME"
+
+echo -e "\${BLUE}📦 Initializing package.json...\${NC}"
+npm init -y > /dev/null
+npm pkg set name="substage-local"
+npm pkg set version="1.0.0"
+npm pkg set main="main.js"
+npm pkg set description="Local AI File Helper"
+npm pkg set author="Enzo Nassif"
+npm pkg set scripts.start="electron ."
+npm pkg set scripts.dist="electron-builder build --mac"
+npm pkg set build.appId="com.enzonassif.substage"
+npm pkg set build.productName="Substage"
+npm pkg set build.mac.category="public.app-category.utilities"
+npm pkg set build.mac.target="dmg"
+
+echo -e "\${BLUE}⬇️  Installing Electron & Builder (this may take a minute)...\${NC}"
+npm install electron electron-builder --save-dev
+
+echo -e "\${BLUE}📝 Creating main process (main.js)...\${NC}"
+cat << 'EOF' > main.js
+const { app, BrowserWindow } = require('electron');
+const path = require('path');
+
+function createWindow () {
+  const win = new BrowserWindow({
+    width: 1000,
+    height: 700,
+    titleBarStyle: 'hiddenInset',
+    backgroundColor: '#1E1E1E',
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    },
+    vibrancy: 'under-window',
+    visualEffectState: 'active'
+  });
+
+  win.loadFile('index.html');
+}
+
+app.whenReady().then(createWindow);
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
+  }
+});
+EOF
+
+echo -e "\${BLUE}🎨 Creating UI (index.html)...\${NC}"
+cat << 'EOF' > index.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Substage</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #1E1E1E;
+            color: #ececec;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .card {
+            background: #2A2A2A;
+            padding: 2rem;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        h1 { margin-bottom: 0.5rem; font-weight: 600; }
+        p { color: #888; font-size: 0.9rem; }
+        .status { color: #28C840; margin-top: 1rem; font-weight: 500; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Substage Local</h1>
+        <p>This is a native build of the Substage environment.</p>
+        <div class="status">● System Active</div>
+    </div>
+</body>
+</html>
+EOF
+
+echo -e "\${GREEN}🔨 Building .dmg (Running electron-builder)...\${NC}"
+npm run dist
+
+echo -e "\${GREEN}✅ Build Complete!\${NC}"
+echo -e "You can find your .dmg file in: \${BLUE}$DIR_NAME/dist/\${NC}"
+open "$DIR_NAME/dist"
+`;
+
+    const blob = new Blob([scriptContent], { type: 'text/x-sh' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'build_substage.sh';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExport = () => {
+    if (isExporting || exportComplete) return;
+    
+    setIsExporting(true);
+    setExportStep('Compiling assets...');
+    setExportProgress(0);
+
+    const interval = setInterval(() => {
+        setExportProgress(prev => {
+            const next = prev + 1.5;
+            
+            if (next > 20 && next < 50) setExportStep('Bundling React application...');
+            if (next > 50 && next < 80) setExportStep('Building native macOS binary...');
+            if (next > 80 && next < 95) setExportStep('Signing with Apple Developer ID...');
+            if (next >= 100) {
+                clearInterval(interval);
+                setExportStep('Done');
+                setExportComplete(true);
+                setIsExporting(false);
+                downloadBuildScript(); // Trigger download
+                return 100;
+            }
+            return next;
+        });
+    }, 50); // Speed up for UX
   };
 
   return (
@@ -92,9 +275,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <p className="text-sm text-gray-400 mt-1">What kinds of commands should run <span className="text-white font-medium">without asking?</span></p>
               </div>
 
-              <div className="grid grid-cols-2 gap-x-16 gap-y-4 px-12">
+              <div className="grid grid-cols-2 gap-x-12 px-6">
                 {/* Column 1 */}
-                <div className="space-y-4">
+                <div className="space-y-3">
                     <label className="flex items-center space-x-3 cursor-pointer group">
                         <input 
                             type="checkbox" 
@@ -102,7 +285,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             onChange={() => handleCheckboxChange('harmless')}
                             className="form-checkbox h-4 w-4 text-[#FF9F0A] rounded border-gray-600 bg-[#3A3A3A] focus:ring-0 focus:ring-offset-0"
                         />
-                        <span className="text-sm text-gray-200 group-hover:text-white">{CATEGORY_LABELS[CommandCategory.HARMLESS]}</span>
+                        <span className="text-sm text-gray-200 group-hover:text-white">Harmless commands</span>
                     </label>
 
                     <label className="flex items-center space-x-3 cursor-pointer group">
@@ -112,7 +295,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             onChange={() => handleCheckboxChange('create')}
                             className="form-checkbox h-4 w-4 text-[#FF9F0A] rounded border-gray-600 bg-[#3A3A3A] focus:ring-0 focus:ring-offset-0"
                         />
-                        <span className="text-sm text-gray-200 group-hover:text-white">{CATEGORY_LABELS[CommandCategory.CREATE]}</span>
+                        <span className="text-sm text-gray-200 group-hover:text-white">Create new files</span>
                     </label>
 
                      <label className="flex items-center space-x-3 cursor-pointer group">
@@ -122,7 +305,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             onChange={() => handleCheckboxChange('rename')}
                             className="form-checkbox h-4 w-4 text-[#FF9F0A] rounded border-gray-600 bg-[#3A3A3A] focus:ring-0 focus:ring-offset-0"
                         />
-                        <span className="text-sm text-gray-200 group-hover:text-white">{CATEGORY_LABELS[CommandCategory.RENAME]}</span>
+                        <span className="text-sm text-gray-200 group-hover:text-white">Rename files</span>
                     </label>
 
                      <label className="flex items-center space-x-3 cursor-pointer group">
@@ -132,33 +315,115 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             onChange={() => handleCheckboxChange('move')}
                             className="form-checkbox h-4 w-4 text-[#FF9F0A] rounded border-gray-600 bg-[#3A3A3A] focus:ring-0 focus:ring-offset-0"
                         />
-                        <span className="text-sm text-gray-200 group-hover:text-white">{CATEGORY_LABELS[CommandCategory.MOVE]}</span>
-                    </label>
-                </div>
-
-                {/* Column 2 */}
-                <div className="space-y-4">
-                   <label className="flex items-center space-x-3 cursor-pointer group opacity-60">
-                        <input 
-                            type="checkbox" 
-                            checked={true} 
-                            readOnly
-                            className="form-checkbox h-4 w-4 text-[#FF9F0A] rounded border-gray-600 bg-[#3A3A3A] focus:ring-0 focus:ring-offset-0"
-                        />
-                        <span className="text-sm text-gray-200">Have minor side effects</span>
+                        <span className="text-sm text-gray-200 group-hover:text-white">Move files</span>
                     </label>
 
                     <label className="flex items-center space-x-3 cursor-pointer group">
                         <input 
                             type="checkbox" 
-                            checked={settings.delete} 
-                            onChange={() => handleCheckboxChange('delete')}
+                            checked={settings.modify} 
+                            onChange={() => handleCheckboxChange('modify')}
+                            className="form-checkbox h-4 w-4 text-[#FF9F0A] rounded border-gray-600 bg-[#3A3A3A] focus:ring-0 focus:ring-offset-0"
+                        />
+                        <span className="text-sm text-gray-200 group-hover:text-white">Modify files</span>
+                    </label>
+
+                    <label className="flex items-center space-x-3 cursor-pointer group">
+                        <input 
+                            type="checkbox" 
+                            checked={settings.changeOutside} 
+                            onChange={() => handleCheckboxChange('changeOutside')}
+                            className="form-checkbox h-4 w-4 text-[#FF9F0A] rounded border-gray-600 bg-[#3A3A3A] focus:ring-0 focus:ring-offset-0"
+                        />
+                        <span className="text-sm text-gray-200 group-hover:text-white">Change files outside current folder</span>
+                    </label>
+
+                    <div className="mt-6 text-xs text-gray-500 space-y-1 pl-7">
+                        <p className="font-medium text-gray-400">Minor side effects include:</p>
+                        <p>• Opening an app or file</p>
+                        <p>• Network access</p>
+                        <p>• Reading from clipboard</p>
+                        <p>• Long running commands</p>
+                    </div>
+                </div>
+
+                {/* Column 2 */}
+                <div className="space-y-3">
+                   <label className="flex items-center space-x-3 cursor-pointer group">
+                        <input 
+                            type="checkbox" 
+                            checked={settings.minorSideEffects} 
+                            onChange={() => handleCheckboxChange('minorSideEffects')}
+                            className="form-checkbox h-4 w-4 text-[#FF9F0A] rounded border-gray-600 bg-[#3A3A3A] focus:ring-0 focus:ring-offset-0"
+                        />
+                        <span className="text-sm text-gray-200 group-hover:text-white">Have minor side effects</span>
+                    </label>
+
+                    <label className="flex items-center space-x-3 cursor-pointer group">
+                        <input 
+                            type="checkbox" 
+                            checked={settings.significantSideEffects} 
+                            onChange={() => handleCheckboxChange('significantSideEffects')}
+                            className="form-checkbox h-4 w-4 text-[#FF9F0A] rounded border-gray-600 bg-[#3A3A3A] focus:ring-0 focus:ring-offset-0"
+                        />
+                        <span className="text-sm text-gray-200 group-hover:text-white">Have significant side effects</span>
+                    </label>
+
+                    <label className="flex items-center space-x-3 cursor-pointer group">
+                        <input 
+                            type="checkbox" 
+                            checked={settings.moveToTrash} 
+                            onChange={() => handleCheckboxChange('moveToTrash')}
                             className="form-checkbox h-4 w-4 text-[#FF453A] rounded border-gray-600 bg-[#3A3A3A] focus:ring-0 focus:ring-offset-0"
                         />
-                        <span className="text-sm text-[#FF453A] group-hover:text-[#ff6057]">{CATEGORY_LABELS[CommandCategory.DELETE]}</span>
+                        <span className="text-sm text-[#FF453A] group-hover:text-[#ff6057]">Move items to Trash</span>
                     </label>
+
+                    <label className="flex items-center space-x-3 cursor-pointer group">
+                        <input 
+                            type="checkbox" 
+                            checked={settings.deleteOverwrite} 
+                            onChange={() => handleCheckboxChange('deleteOverwrite')}
+                            className="form-checkbox h-4 w-4 text-[#FF9F0A] rounded border-gray-600 bg-[#3A3A3A] focus:ring-0 focus:ring-offset-0"
+                        />
+                        <span className="text-sm text-gray-200 group-hover:text-white">Delete or overwrite files</span>
+                    </label>
+
+                    <label className="flex items-center space-x-3 cursor-pointer group">
+                        <input 
+                            type="checkbox" 
+                            checked={settings.unknownScripts} 
+                            onChange={() => handleCheckboxChange('unknownScripts')}
+                            className="form-checkbox h-4 w-4 text-[#FF9F0A] rounded border-gray-600 bg-[#3A3A3A] focus:ring-0 focus:ring-offset-0"
+                        />
+                        <span className="text-sm text-gray-200 group-hover:text-white">Run unknown scripts or commands</span>
+                    </label>
+
+                     <label className="flex items-center space-x-3 cursor-pointer group">
+                        <input 
+                            type="checkbox" 
+                            checked={settings.commandsWithErrors} 
+                            onChange={() => handleCheckboxChange('commandsWithErrors')}
+                            className="form-checkbox h-4 w-4 text-[#FF9F0A] rounded border-gray-600 bg-[#3A3A3A] focus:ring-0 focus:ring-offset-0"
+                        />
+                        <span className="text-sm text-gray-200 group-hover:text-white">Commands with errors</span>
+                    </label>
+
+                    <div className="mt-6 text-xs text-gray-500 space-y-1 pl-7">
+                        <p className="font-medium text-gray-400">Significant side effects include:</p>
+                        <p>• Modifying system settings</p>
+                        <p>• Force-quitting an app</p>
+                        <p>• Shutting down your Mac</p>
+                        <p>• Indefinite running commands</p>
+                    </div>
                 </div>
               </div>
+
+               <div className="mt-8 flex items-center justify-center space-x-2 text-[#FF453A] bg-[#FF453A]/10 py-3 rounded-lg border border-[#FF453A]/20 mx-6">
+                    <AlertCircle size={18} />
+                    <span className="text-sm font-medium">Allowing Substage to move files to the trash without confirmation isn't recommended.</span>
+               </div>
+
             </div>
           )}
 
@@ -354,19 +619,57 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* ABOUT TAB */}
           {activeTab === 'about' && (
-              <div className="h-full flex flex-col items-center justify-center text-center p-8">
+              <div className="h-full flex flex-col items-center justify-center text-center p-8 relative">
                   <div className="w-24 h-24 bg-gradient-to-br from-[#FF9F0A] to-[#FF453A] rounded-2xl shadow-2xl flex items-center justify-center mb-6 ring-1 ring-white/10">
                       <HardDrive size={48} className="text-white drop-shadow-md"/>
                   </div>
                   <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">LOCAL AI</h1>
-                  <p className="text-gray-400 text-sm">Version 1.0 (Simulation)</p>
+                  <p className="text-gray-400 text-sm">Version 1.0 (Web Simulation)</p>
                   
-                  <div className="mt-8 text-sm text-gray-500 bg-[#222] py-4 px-12 rounded-xl border border-white/5">
+                  <div className="mt-8 text-sm text-gray-500 bg-[#222] py-4 px-12 rounded-xl border border-white/5 w-64">
                       <p>Created by</p>
                       <p className="text-white font-medium mt-1 text-base">Enzo Nassif</p>
                   </div>
 
-                  <div className="mt-12 text-xs text-gray-600 space-y-1">
+                  {/* Export Simulation Area */}
+                  <div className="mt-8 w-64">
+                      {!isExporting && !exportComplete && (
+                          <button 
+                             onClick={handleExport}
+                             className="w-full flex items-center justify-center space-x-2 bg-[#3A3A3A] hover:bg-[#FF9F0A] hover:text-black text-gray-300 py-2.5 rounded-lg text-xs font-medium transition-all border border-white/10"
+                          >
+                              <Package size={14} />
+                              <span>Export to .dmg</span>
+                          </button>
+                      )}
+
+                      {isExporting && (
+                          <div className="w-full bg-[#1A1A1A] p-3 rounded-lg border border-white/10">
+                              <div className="flex justify-between items-center mb-2">
+                                  <span className="text-[10px] text-gray-400">{exportStep}</span>
+                                  <span className="text-[10px] text-[#FF9F0A]">{Math.round(exportProgress)}%</span>
+                              </div>
+                              <div className="w-full h-1 bg-black/50 rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-[#FF9F0A] transition-all duration-100 ease-out"
+                                    style={{ width: `${exportProgress}%` }}
+                                  ></div>
+                              </div>
+                          </div>
+                      )}
+
+                       {exportComplete && (
+                          <div className="flex flex-col space-y-2 animate-in fade-in zoom-in duration-300">
+                             <div className="flex items-center justify-center space-x-2 bg-[#28C840]/10 text-[#28C840] py-2.5 rounded-lg text-xs font-medium border border-[#28C840]/20 cursor-default">
+                                  <CheckCircle size={14} />
+                                  <span>Generated Script</span>
+                             </div>
+                             <p className="text-[10px] text-gray-500">Run the downloaded script to build .dmg</p>
+                          </div>
+                      )}
+                  </div>
+
+                  <div className="mt-8 text-[10px] text-gray-600 space-y-1">
                       <p>© 2025 Substage Simulation.</p>
                       <p>All rights reserved.</p>
                   </div>

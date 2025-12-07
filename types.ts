@@ -39,8 +39,14 @@ export interface AutoRunSettings {
   create: boolean;
   rename: boolean;
   move: boolean;
-  delete: boolean;
   modify: boolean;
+  changeOutside: boolean;
+  minorSideEffects: boolean;
+  significantSideEffects: boolean;
+  moveToTrash: boolean;
+  deleteOverwrite: boolean;
+  unknownScripts: boolean;
+  commandsWithErrors: boolean;
 }
 
 export interface SettingsTab {
