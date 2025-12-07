@@ -1,0 +1,5 @@
+{
+  "name": "Substage AI File Helper",
+  "description": "A web-based simulation of a macOS AI-powered file helper utility. It features a Finder-like interface, a floating AI command bar, and a configurable auto-run settings menu utilizing the Gemini API to generate terminal commands.",
+  "requestFramePermissions": []
+}
